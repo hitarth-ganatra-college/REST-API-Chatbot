@@ -150,6 +150,10 @@ micBtn.onclick = async () => {
     setStatus("Mic stopped");
     return;
   }
+  if(!pc || pc.connectionState === "closed") {
+    setStatus("Not connected yet. Please wait for the agent.");
+    return;
+  }
   // Start mic
   setStatus("Opening your microphone...");
   localStream = await navigator.mediaDevices.getUserMedia({audio: true});
