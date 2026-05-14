@@ -97,7 +97,6 @@ function resolveSessionId() {
   return validateSessionId(localStorage.getItem("voiceAgentSessionId"));
 }
 
-let activeSessionId = null;
 
 let ws, pc, localStream, audioSender;
 let micActive = false;
@@ -127,16 +126,16 @@ function appendMsg(text, who) {
 // --- Voice/webRTC setup code ---
 voiceBtn.onclick = async () => {
   showModal();
-  activeSessionId = validateSessionId(sessionInput.value);
-  if (!activeSessionId) {
+  const currentSessionId = validateSessionId(sessionInput.value);
+  if (!currentSessionId) {
     setStatus("Session ID required (3-32 alphanumeric characters or underscores).");
     return;
   }
-  localStorage.setItem("voiceAgentSessionId", activeSessionId);
+  localStorage.setItem("voiceAgentSessionId", currentSessionId);
   setStatus("Connecting...");
   ws = new WebSocket(SIGNALING_SERVER_URL);
   ws.onopen = () => {
-    ws.send(JSON.stringify({type: "join", room: activeSessionId, side: "client"}));
+    ws.send(JSON.stringify({type: "join", room: currentSessionId, sessionId: currentSessionId, side: "client"}));
     setStatus("Waiting for agent...");
   };
   ws.onclose = hangup;
@@ -147,14 +146,14 @@ voiceBtn.onclick = async () => {
       setStatus("Waiting for agent...");
     }
     if(msg.type === "ready") {
-      await setupWebRTC();
+      await setupWebRTC(currentSessionId);
       setStatus("Connected. Click mic!");
     }
     if(msg.type === "offer") {
       await pc.setRemoteDescription(new RTCSessionDescription({type: "offer", sdp: msg.sdp}));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      ws.send(JSON.stringify({type: "answer", sdp: pc.localDescription.sdp, room: activeSessionId}));
+      ws.send(JSON.stringify({type: "answer", sdp: pc.localDescription.sdp, sessionId: currentSessionId}));
     }
     if(msg.type === "answer") {
       await pc.setRemoteDescription(new RTCSessionDescription({type: "answer", sdp: msg.sdp}));
@@ -172,16 +171,12 @@ voiceBtn.onclick = async () => {
   };
 };
 
-async function setupWebRTC() {
+async function setupWebRTC(sessionId) {
   pc = new RTCPeerConnection({iceServers: []});
   // ICE trickle
   pc.onicecandidate = e => {
-    if (e.candidate) {
-      if (!activeSessionId) {
-        console.warn("Missing session ID; skipping ICE candidate.");
-        return;
-      }
-      ws.send(JSON.stringify({type:"ice", candidate:e.candidate, room: activeSessionId}));
+    if (e.candidate && sessionId) {
+      ws.send(JSON.stringify({type:"ice", candidate:e.candidate, sessionId}));
     }
   };
 
