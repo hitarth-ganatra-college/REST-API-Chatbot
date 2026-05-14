@@ -135,7 +135,7 @@ voiceBtn.onclick = async () => {
   setStatus("Connecting...");
   ws = new WebSocket(SIGNALING_SERVER_URL);
   ws.onopen = () => {
-    ws.send(JSON.stringify({type: "join", room: currentSessionId, sessionId: currentSessionId, side: "client"}));
+    ws.send(JSON.stringify({type: "join", session_id: currentSessionId, side: "client"}));
     setStatus("Waiting for agent...");
   };
   ws.onclose = hangup;
@@ -153,7 +153,7 @@ voiceBtn.onclick = async () => {
       await pc.setRemoteDescription(new RTCSessionDescription({type: "offer", sdp: msg.sdp}));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      ws.send(JSON.stringify({type: "answer", sdp: pc.localDescription.sdp, sessionId: currentSessionId}));
+      ws.send(JSON.stringify({type: "answer", sdp: pc.localDescription.sdp, session_id: currentSessionId}));
     }
     if(msg.type === "answer") {
       await pc.setRemoteDescription(new RTCSessionDescription({type: "answer", sdp: msg.sdp}));
@@ -175,8 +175,8 @@ async function setupWebRTC(sessionId) {
   pc = new RTCPeerConnection({iceServers: []});
   // ICE trickle
   pc.onicecandidate = e => {
-    if (e.candidate && sessionId) {
-      ws.send(JSON.stringify({type:"ice", candidate:e.candidate, sessionId}));
+    if (e.candidate) {
+      ws.send(JSON.stringify({type:"ice", candidate:e.candidate, session_id: sessionId}));
     }
   };
 
