@@ -26,6 +26,19 @@
       display: flex; flex-direction: column; gap: 4px;
       background: #f5f7fb;
     }
+    #sessionRow {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 12px; border-bottom: 1px solid #e0e6f5;
+      background: #f5f7fb;
+    }
+    #sessionRow label {font-size: 12px; color: #555;}
+    #sessionInput {
+      flex: 1;
+      padding: 6px 8px;
+      border: 1px solid #cfd6e5;
+      border-radius: 6px;
+      font-size: 13px;
+    }
     .bubble {max-width: 75%; padding: 8px 13px; border-radius: 13px; margin-bottom: 2px;}
     .user {align-self: flex-end; background: #e8f1fe;}
     .bot  {align-self: flex-start; background: #e5faed;}
@@ -50,6 +63,10 @@
 
 <div id="voiceCallModal">
   <div id="header">🔵 Voice Agent</div>
+  <div id="sessionRow">
+    <label for="sessionInput">Session ID</label>
+    <input id="sessionInput" type="text" placeholder="my_session_123" />
+  </div>
   <div id="chat"></div>
   <div id="controls">
     <button id="micBtn">Start Talking</button>
@@ -60,7 +77,26 @@
 
 <script>
 const SIGNALING_SERVER_URL = "ws://localhost:8765"; // CHANGE for your server!
-const SESSION_ID = Math.random().toString(36).slice(2,16); // Or use real session ID
+const SESSION_ID_REGEX = /^[a-zA-Z0-9_]{3,32}$/;
+
+function validateSessionId(value) {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return SESSION_ID_REGEX.test(trimmed) ? trimmed : null;
+}
+
+function resolveSessionId() {
+  const queryParams = new URLSearchParams(window.location.search);
+  const paramSessionId = validateSessionId(queryParams.get("session"));
+  if (paramSessionId) {
+    localStorage.setItem("voiceAgentSessionId", paramSessionId);
+    return paramSessionId;
+  }
+
+  return validateSessionId(localStorage.getItem("voiceAgentSessionId"));
+}
+
 
 let ws, pc, localStream, audioSender;
 let micActive = false;
@@ -68,9 +104,12 @@ let micActive = false;
 const voiceBtn = document.getElementById('voiceAgentBtn');
 const voiceModal = document.getElementById('voiceCallModal');
 const chat = document.getElementById('chat');
+const sessionInput = document.getElementById('sessionInput');
 const micBtn = document.getElementById('micBtn');
 const hangupBtn = document.getElementById('hangupBtn');
 const statusMsg = document.getElementById('statusMsg');
+
+sessionInput.value = resolveSessionId() || "";
 
 function showModal() { voiceModal.style.display = 'flex'; }
 function hideModal() { voiceModal.style.display = 'none'; }
@@ -87,10 +126,16 @@ function appendMsg(text, who) {
 // --- Voice/webRTC setup code ---
 voiceBtn.onclick = async () => {
   showModal();
+  const currentSessionId = validateSessionId(sessionInput.value);
+  if (!currentSessionId) {
+    setStatus("Session ID required (3-32 characters: letters, numbers, or underscores).");
+    return;
+  }
+  localStorage.setItem("voiceAgentSessionId", currentSessionId);
   setStatus("Connecting...");
   ws = new WebSocket(SIGNALING_SERVER_URL);
   ws.onopen = () => {
-    ws.send(JSON.stringify({type: "join", room: SESSION_ID, side: "client"}));
+    ws.send(JSON.stringify({type: "join", session_id: currentSessionId, side: "client"}));
     setStatus("Waiting for agent...");
   };
   ws.onclose = hangup;
@@ -101,14 +146,14 @@ voiceBtn.onclick = async () => {
       setStatus("Waiting for agent...");
     }
     if(msg.type === "ready") {
-      await setupWebRTC();
+      await setupWebRTC(currentSessionId);
       setStatus("Connected. Click mic!");
     }
     if(msg.type === "offer") {
       await pc.setRemoteDescription(new RTCSessionDescription({type: "offer", sdp: msg.sdp}));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      ws.send(JSON.stringify({type: "answer", sdp: pc.localDescription.sdp, room: SESSION_ID}));
+      ws.send(JSON.stringify({type: "answer", sdp: pc.localDescription.sdp, session_id: currentSessionId}));
     }
     if(msg.type === "answer") {
       await pc.setRemoteDescription(new RTCSessionDescription({type: "answer", sdp: msg.sdp}));
@@ -126,11 +171,13 @@ voiceBtn.onclick = async () => {
   };
 };
 
-async function setupWebRTC() {
+async function setupWebRTC(sessionId) {
   pc = new RTCPeerConnection({iceServers: []});
   // ICE trickle
   pc.onicecandidate = e => {
-    if(e.candidate) ws.send(JSON.stringify({type:"ice", candidate:e.candidate, room:SESSION_ID}));
+    if (e.candidate) {
+      ws.send(JSON.stringify({type: "ice", candidate: e.candidate, session_id: sessionId}));
+    }
   };
 
   // Receive bot audio (if future TTS server-side), not used here
