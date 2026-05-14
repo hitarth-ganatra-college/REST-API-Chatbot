@@ -61,8 +61,35 @@
 <script>
 const SIGNALING_SERVER_URL = "ws://localhost:8765"; // CHANGE for your server!
 const DEFAULT_SESSION_ID = "testsession1";
-const sessionParams = new URLSearchParams(window.location.search);
-const SESSION_ID = (sessionParams.get("session") || sessionParams.get("room") || DEFAULT_SESSION_ID).trim();
+const SESSION_ID_PATTERN = /^[a-zA-Z0-9_-]{3,32}$/;
+
+function sanitizeSessionId(value) {
+  if (!value) return null;
+  const trimmed = value.trim();
+  return SESSION_ID_PATTERN.test(trimmed) ? trimmed : null;
+}
+
+function resolveSessionId() {
+  const sessionParams = new URLSearchParams(window.location.search);
+  const paramSessionId = sanitizeSessionId(sessionParams.get("session") || sessionParams.get("room"));
+  if (paramSessionId) {
+    localStorage.setItem("voiceAgentSessionId", paramSessionId);
+    return paramSessionId;
+  }
+
+  const storedSessionId = sanitizeSessionId(localStorage.getItem("voiceAgentSessionId"));
+  if (storedSessionId) return storedSessionId;
+
+  const promptedSessionId = sanitizeSessionId(
+    prompt("Enter the session ID used by the agent:", DEFAULT_SESSION_ID)
+  );
+  if (promptedSessionId) {
+    localStorage.setItem("voiceAgentSessionId", promptedSessionId);
+  }
+  return promptedSessionId;
+}
+
+let sessionId = null;
 
 let ws, pc, localStream, audioSender;
 let micActive = false;
@@ -89,10 +116,15 @@ function appendMsg(text, who) {
 // --- Voice/webRTC setup code ---
 voiceBtn.onclick = async () => {
   showModal();
+  sessionId = resolveSessionId();
+  if (!sessionId) {
+    setStatus("Session ID required.");
+    return;
+  }
   setStatus("Connecting...");
   ws = new WebSocket(SIGNALING_SERVER_URL);
   ws.onopen = () => {
-    ws.send(JSON.stringify({type: "join", room: SESSION_ID, side: "client"}));
+    ws.send(JSON.stringify({type: "join", room: sessionId, side: "client"}));
     setStatus("Waiting for agent...");
   };
   ws.onclose = hangup;
@@ -110,7 +142,7 @@ voiceBtn.onclick = async () => {
       await pc.setRemoteDescription(new RTCSessionDescription({type: "offer", sdp: msg.sdp}));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      ws.send(JSON.stringify({type: "answer", sdp: pc.localDescription.sdp, room: SESSION_ID}));
+      ws.send(JSON.stringify({type: "answer", sdp: pc.localDescription.sdp, room: sessionId}));
     }
     if(msg.type === "answer") {
       await pc.setRemoteDescription(new RTCSessionDescription({type: "answer", sdp: msg.sdp}));
@@ -132,7 +164,7 @@ async function setupWebRTC() {
   pc = new RTCPeerConnection({iceServers: []});
   // ICE trickle
   pc.onicecandidate = e => {
-    if(e.candidate) ws.send(JSON.stringify({type:"ice", candidate:e.candidate, room:SESSION_ID}));
+    if(e.candidate) ws.send(JSON.stringify({type:"ice", candidate:e.candidate, room: sessionId}));
   };
 
   // Receive bot audio (if future TTS server-side), not used here
