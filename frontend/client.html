@@ -26,6 +26,19 @@
       display: flex; flex-direction: column; gap: 4px;
       background: #f5f7fb;
     }
+    #sessionRow {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 12px; border-bottom: 1px solid #e0e6f5;
+      background: #f5f7fb;
+    }
+    #sessionRow label {font-size: 12px; color: #555;}
+    #sessionInput {
+      flex: 1;
+      padding: 6px 8px;
+      border: 1px solid #cfd6e5;
+      border-radius: 6px;
+      font-size: 13px;
+    }
     .bubble {max-width: 75%; padding: 8px 13px; border-radius: 13px; margin-bottom: 2px;}
     .user {align-self: flex-end; background: #e8f1fe;}
     .bot  {align-self: flex-start; background: #e5faed;}
@@ -50,6 +63,10 @@
 
 <div id="voiceCallModal">
   <div id="header">🔵 Voice Agent</div>
+  <div id="sessionRow">
+    <label for="sessionInput">Session ID</label>
+    <input id="sessionInput" type="text" placeholder="testsession1" />
+  </div>
   <div id="chat"></div>
   <div id="controls">
     <button id="micBtn">Start Talking</button>
@@ -60,7 +77,6 @@
 
 <script>
 const SIGNALING_SERVER_URL = "ws://localhost:8765"; // CHANGE for your server!
-const DEFAULT_SESSION_ID = "testsession1";
 const SESSION_ID_PATTERN = /^[a-zA-Z0-9_-]{3,32}$/;
 
 function sanitizeSessionId(value) {
@@ -78,15 +94,7 @@ function resolveSessionId() {
   }
 
   const storedSessionId = sanitizeSessionId(localStorage.getItem("voiceAgentSessionId"));
-  if (storedSessionId) return storedSessionId;
-
-  const promptedSessionId = sanitizeSessionId(
-    prompt("Enter the session ID used by the agent:", DEFAULT_SESSION_ID)
-  );
-  if (promptedSessionId) {
-    localStorage.setItem("voiceAgentSessionId", promptedSessionId);
-  }
-  return promptedSessionId;
+  return storedSessionId || "";
 }
 
 let sessionId = null;
@@ -97,9 +105,12 @@ let micActive = false;
 const voiceBtn = document.getElementById('voiceAgentBtn');
 const voiceModal = document.getElementById('voiceCallModal');
 const chat = document.getElementById('chat');
+const sessionInput = document.getElementById('sessionInput');
 const micBtn = document.getElementById('micBtn');
 const hangupBtn = document.getElementById('hangupBtn');
 const statusMsg = document.getElementById('statusMsg');
+
+sessionInput.value = resolveSessionId();
 
 function showModal() { voiceModal.style.display = 'flex'; }
 function hideModal() { voiceModal.style.display = 'none'; }
@@ -116,11 +127,12 @@ function appendMsg(text, who) {
 // --- Voice/webRTC setup code ---
 voiceBtn.onclick = async () => {
   showModal();
-  sessionId = resolveSessionId();
+  sessionId = sanitizeSessionId(sessionInput.value);
   if (!sessionId) {
-    setStatus("Session ID required.");
+    setStatus("Session ID required (letters, numbers, - or _).");
     return;
   }
+  localStorage.setItem("voiceAgentSessionId", sessionId);
   setStatus("Connecting...");
   ws = new WebSocket(SIGNALING_SERVER_URL);
   ws.onopen = () => {
