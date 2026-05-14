@@ -1,4 +1,29 @@
-__pycache__
-voice_agent/
+# Ignore all virtual environments
 signaling_server/
+.signaling_server/
+voice_agent/
+.voice_agent/
+
+# Ignore all Python cache files/folders
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Ignore environment variable files
 .env
+.env.*
+
+# Ignore common Python build/cache artifacts
+*.log
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Ignore IDE files (optional)
+.vscode/
+.idea/
