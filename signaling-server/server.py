@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.DEBUG if Config.DEBUG else logging.INFO)
 ROOMS = {}  # session_id : { 'client': ws, 'agent': ws }
 print("WEBSOCKETS LIB PATH:", websockets.__file__)
 print("WEBSOCKETS VERSION:", websockets.__version__)
-async def handler(ws, path):
+async def handler(ws, path=None):
     session_id = None
     role = None
     try:
