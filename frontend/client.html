@@ -65,7 +65,7 @@
   <div id="header">🔵 Voice Agent</div>
   <div id="sessionRow">
     <label for="sessionInput">Session ID</label>
-    <input id="sessionInput" type="text" placeholder="testsession1" aria-label="Session ID" />
+    <input id="sessionInput" type="text" placeholder="testsession1" />
   </div>
   <div id="chat"></div>
   <div id="controls">
@@ -128,7 +128,7 @@ voiceBtn.onclick = async () => {
   showModal();
   activeSessionId = sanitizeSessionId(sessionInput.value);
   if (!activeSessionId) {
-    setStatus("Session ID required (3-32 chars, letters, numbers, or _).");
+    setStatus("Session ID required (3-32 chars, letters, numbers, or underscores).");
     return;
   }
   localStorage.setItem("voiceAgentSessionId", activeSessionId);
