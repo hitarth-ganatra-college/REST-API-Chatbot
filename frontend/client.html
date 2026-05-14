@@ -87,14 +87,15 @@ function sanitizeSessionId(value) {
 
 function resolveSessionId() {
   const sessionParams = new URLSearchParams(window.location.search);
-  const paramSessionId = sanitizeSessionId(sessionParams.get("session") || sessionParams.get("room"));
+  const paramSessionId = sanitizeSessionId(
+    sessionParams.get("session") || sessionParams.get("room") // support legacy ?room=
+  );
   if (paramSessionId) {
     localStorage.setItem("voiceAgentSessionId", paramSessionId);
     return paramSessionId;
   }
 
-  const storedSessionId = sanitizeSessionId(localStorage.getItem("voiceAgentSessionId"));
-  return storedSessionId || "";
+  return sanitizeSessionId(localStorage.getItem("voiceAgentSessionId"));
 }
 
 let activeSessionId = null;
@@ -110,7 +111,7 @@ const micBtn = document.getElementById('micBtn');
 const hangupBtn = document.getElementById('hangupBtn');
 const statusMsg = document.getElementById('statusMsg');
 
-sessionInput.value = resolveSessionId();
+sessionInput.value = resolveSessionId() || "";
 
 function showModal() { voiceModal.style.display = 'flex'; }
 function hideModal() { voiceModal.style.display = 'none'; }
