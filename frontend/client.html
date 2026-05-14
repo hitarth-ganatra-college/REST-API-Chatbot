@@ -60,7 +60,9 @@
 
 <script>
 const SIGNALING_SERVER_URL = "ws://localhost:8765"; // CHANGE for your server!
-const SESSION_ID = Math.random().toString(36).slice(2,16); // Or use real session ID
+const DEFAULT_SESSION_ID = "testsession1";
+const sessionParams = new URLSearchParams(window.location.search);
+const SESSION_ID = (sessionParams.get("session") || sessionParams.get("room") || DEFAULT_SESSION_ID).trim();
 
 let ws, pc, localStream, audioSender;
 let micActive = false;
