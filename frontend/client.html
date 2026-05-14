@@ -87,8 +87,8 @@ function validateSessionId(value) {
 }
 
 function resolveSessionId() {
-  const sessionParams = new URLSearchParams(window.location.search);
-  const paramSessionId = validateSessionId(sessionParams.get("session"));
+  const queryParams = new URLSearchParams(window.location.search);
+  const paramSessionId = validateSessionId(queryParams.get("session"));
   if (paramSessionId) {
     localStorage.setItem("voiceAgentSessionId", paramSessionId);
     return paramSessionId;
@@ -128,7 +128,7 @@ voiceBtn.onclick = async () => {
   showModal();
   const currentSessionId = validateSessionId(sessionInput.value);
   if (!currentSessionId) {
-    setStatus("Session ID required (3-32 alphanumeric characters or underscores).");
+    setStatus("Session ID required (3-32 characters: letters, numbers, or underscores).");
     return;
   }
   localStorage.setItem("voiceAgentSessionId", currentSessionId);
