@@ -82,6 +82,7 @@ const SESSION_ID_PATTERN = /^[a-zA-Z0-9_]{3,32}$/;
 function validateSessionId(value) {
   if (!value) return null;
   const trimmed = value.trim();
+  if (!trimmed) return null;
   return SESSION_ID_PATTERN.test(trimmed) ? trimmed : null;
 }
 
@@ -175,7 +176,11 @@ async function setupWebRTC() {
   pc = new RTCPeerConnection({iceServers: []});
   // ICE trickle
   pc.onicecandidate = e => {
-    if(e.candidate && activeSessionId) {
+    if (e.candidate) {
+      if (!activeSessionId) {
+        console.warn("Missing session ID; skipping ICE candidate.");
+        return;
+      }
       ws.send(JSON.stringify({type:"ice", candidate:e.candidate, room: activeSessionId}));
     }
   };
