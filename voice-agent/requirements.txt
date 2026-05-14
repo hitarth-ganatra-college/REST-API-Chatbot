@@ -1,0 +1,8 @@
+aiortc
+requests
+python-dotenv
+psycopg2-binary
+SQLAlchemy
+websockets
+soundfile
+pymysql

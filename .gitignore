@@ -1,0 +1,4 @@
+__pycache__
+voice_agent/
+signaling_server/
+.env

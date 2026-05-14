@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Voice Agent Demo</title>
+  <style>
+    #voiceAgentBtn {
+      position: fixed; z-index: 9999; right: 32px; bottom: 32px;
+      width: 64px; height: 64px;
+      border-radius: 50%; background: #3a7bfa; box-shadow: 0 2px 8px #3339;
+      border: none; color: white; font-size: 36px; cursor: pointer;
+      transition: background 0.2s;
+    }
+    #voiceAgentBtn:hover {background: #2d5bb7;}
+    #voiceCallModal {
+      display: none; position: fixed; right: 100px; bottom: 120px; width: 340px;
+      background: #fff; border-radius: 16px; box-shadow: 0 2px 16px #2226; padding: 0; z-index: 10000;
+      border: 2px solid #3a7bfa;
+      flex-direction: column;
+      font-family: system-ui,sans-serif;
+    }
+    #header {background: #3a7bfa; color: #fff; font-weight: bold; padding: 14px; border-radius: 16px 16px 0 0;}
+    #chat {
+      padding: 12px 12px 12px 12px;
+      height: 180px; max-height: 180px; overflow-y: auto; font-size: 15px;
+      display: flex; flex-direction: column; gap: 4px;
+      background: #f5f7fb;
+    }
+    .bubble {max-width: 75%; padding: 8px 13px; border-radius: 13px; margin-bottom: 2px;}
+    .user {align-self: flex-end; background: #e8f1fe;}
+    .bot  {align-self: flex-start; background: #e5faed;}
+    #controls {padding: 15px 8px; display: flex; gap: 12px; justify-content: center;}
+    #hangupBtn {
+      background: #ff6666; color: #fff; border: none; border-radius: 7px; padding: 8px 18px; font-size: 15px; font-weight: 600;
+      cursor: pointer;
+    }
+    #hangupBtn:hover {background: #f33;}
+    #micBtn {
+      background: #3a7bfa;
+      color: #fff; border: none; border-radius: 7px; padding: 8px 18px; font-size: 15px; font-weight: 600;
+      cursor: pointer;
+    }
+    #micBtn.active {background: #32d269;}
+    #status {color: #888; font-size: 12px; margin-top: 6px;}
+  </style>
+</head>
+<body>
+
+<button id="voiceAgentBtn">🎙️</button>
+
+<div id="voiceCallModal">
+  <div id="header">🔵 Voice Agent</div>
+  <div id="chat"></div>
+  <div id="controls">
+    <button id="micBtn">Start Talking</button>
+    <button id="hangupBtn">Hang Up</button>
+  </div>
+  <div id="status">Status: <span id="statusMsg">Idle</span></div>
+</div>
+
+<script>
+const SIGNALING_SERVER_URL = "ws://localhost:8765"; // CHANGE for your server!
+const SESSION_ID = Math.random().toString(36).slice(2,16); // Or use real session ID
+
+let ws, pc, localStream, audioSender;
+let micActive = false;
+
+const voiceBtn = document.getElementById('voiceAgentBtn');
+const voiceModal = document.getElementById('voiceCallModal');
+const chat = document.getElementById('chat');
+const micBtn = document.getElementById('micBtn');
+const hangupBtn = document.getElementById('hangupBtn');
+const statusMsg = document.getElementById('statusMsg');
+
+function showModal() { voiceModal.style.display = 'flex'; }
+function hideModal() { voiceModal.style.display = 'none'; }
+function setStatus(text) { statusMsg.innerText = text;}
+
+function appendMsg(text, who) {
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble ' + (who === 'user' ? 'user' : 'bot');
+  bubble.innerText = text;
+  chat.appendChild(bubble);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+// --- Voice/webRTC setup code ---
+voiceBtn.onclick = async () => {
+  showModal();
+  setStatus("Connecting...");
+  ws = new WebSocket(SIGNALING_SERVER_URL);
+  ws.onopen = () => {
+    ws.send(JSON.stringify({type: "join", room: SESSION_ID, side: "client"}));
+    setStatus("Waiting for agent...");
+  };
+  ws.onclose = hangup;
+
+  ws.onmessage = async (event) => {
+    const msg = JSON.parse(event.data);
+    if(msg.type === "joined") {
+      setStatus("Waiting for agent...");
+    }
+    if(msg.type === "ready") {
+      await setupWebRTC();
+      setStatus("Connected. Click mic!");
+    }
+    if(msg.type === "offer") {
+      await pc.setRemoteDescription(new RTCSessionDescription({type: "offer", sdp: msg.sdp}));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      ws.send(JSON.stringify({type: "answer", sdp: pc.localDescription.sdp, room: SESSION_ID}));
+    }
+    if(msg.type === "answer") {
+      await pc.setRemoteDescription(new RTCSessionDescription({type: "answer", sdp: msg.sdp}));
+    }
+    if(msg.type === "ice" && msg.candidate) {
+      try {
+        await pc.addIceCandidate(msg.candidate);
+      } catch(e) {console.log(e);}
+    }
+    if(msg.type === "peer_left") {
+      setStatus("Agent disconnected.");
+      hangup();
+    }
+    // Optionally handle bot message/data channel events here
+  };
+};
+
+async function setupWebRTC() {
+  pc = new RTCPeerConnection({iceServers: []});
+  // ICE trickle
+  pc.onicecandidate = e => {
+    if(e.candidate) ws.send(JSON.stringify({type:"ice", candidate:e.candidate, room:SESSION_ID}));
+  };
+
+  // Receive bot audio (if future TTS server-side), not used here
+  // pc.ontrack = e => { /* handle agent->user audio */ };
+
+  // Setup data channel if agent sends bot replies as text (otherwise fetch via websocket, or poll turn data)
+  // You could expand here later.
+}
+
+micBtn.onclick = async () => {
+  if(micActive) {
+    // Pause mic
+    if(localStream) {localStream.getTracks().forEach(tr=>tr.stop());}
+    micBtn.innerText = "Start Talking";
+    micBtn.classList.remove('active');
+    micActive = false;
+    setStatus("Mic stopped");
+    return;
+  }
+  // Start mic
+  setStatus("Opening your microphone...");
+  localStream = await navigator.mediaDevices.getUserMedia({audio: true});
+  micBtn.classList.add('active');
+  micBtn.innerText = "Stop Talking";
+  setStatus("Mic streaming...");
+  micActive = true;
+  // Send mic audio only as long as button is active
+  // (could keep sending while connection is up if you want, or only when speaking via VAD)
+  audioSender = pc.addTrack(localStream.getAudioTracks()[0], localStream);
+};
+
+hangupBtn.onclick = hangup;
+function hangup(){
+  if(ws) { ws.close(); ws = null; }
+  if(pc) { pc.close(); pc = null; }
+  if(localStream) {localStream.getTracks().forEach(tr=>tr.stop()); }
+  setStatus("Idle");
+  hideModal();
+  // Reset UI
+  chat.innerHTML = "";
+  micActive = false;
+  micBtn.innerText = "Start Talking";
+  micBtn.classList.remove('active');
+}
+
+// For debugging: you can call appendMsg("test", "user") or "bot"
+</script>
+</body>
+</html>
