@@ -77,7 +77,7 @@
 
 <script>
 const SIGNALING_SERVER_URL = "ws://localhost:8765"; // CHANGE for your server!
-const SESSION_ID_PATTERN = /^[a-zA-Z0-9_-]{3,32}$/;
+const SESSION_ID_PATTERN = /^[a-zA-Z0-9_]{3,32}$/;
 
 function sanitizeSessionId(value) {
   if (!value) return null;
@@ -97,7 +97,7 @@ function resolveSessionId() {
   return storedSessionId || "";
 }
 
-let sessionId = null;
+let activeSessionId = null;
 
 let ws, pc, localStream, audioSender;
 let micActive = false;
@@ -127,16 +127,16 @@ function appendMsg(text, who) {
 // --- Voice/webRTC setup code ---
 voiceBtn.onclick = async () => {
   showModal();
-  sessionId = sanitizeSessionId(sessionInput.value);
-  if (!sessionId) {
-    setStatus("Session ID required (letters, numbers, - or _).");
+  activeSessionId = sanitizeSessionId(sessionInput.value);
+  if (!activeSessionId) {
+    setStatus("Session ID required (letters, numbers, or _).");
     return;
   }
-  localStorage.setItem("voiceAgentSessionId", sessionId);
+  localStorage.setItem("voiceAgentSessionId", activeSessionId);
   setStatus("Connecting...");
   ws = new WebSocket(SIGNALING_SERVER_URL);
   ws.onopen = () => {
-    ws.send(JSON.stringify({type: "join", room: sessionId, side: "client"}));
+    ws.send(JSON.stringify({type: "join", room: activeSessionId, side: "client"}));
     setStatus("Waiting for agent...");
   };
   ws.onclose = hangup;
@@ -154,7 +154,7 @@ voiceBtn.onclick = async () => {
       await pc.setRemoteDescription(new RTCSessionDescription({type: "offer", sdp: msg.sdp}));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      ws.send(JSON.stringify({type: "answer", sdp: pc.localDescription.sdp, room: sessionId}));
+      ws.send(JSON.stringify({type: "answer", sdp: pc.localDescription.sdp, room: activeSessionId}));
     }
     if(msg.type === "answer") {
       await pc.setRemoteDescription(new RTCSessionDescription({type: "answer", sdp: msg.sdp}));
@@ -176,7 +176,7 @@ async function setupWebRTC() {
   pc = new RTCPeerConnection({iceServers: []});
   // ICE trickle
   pc.onicecandidate = e => {
-    if(e.candidate) ws.send(JSON.stringify({type:"ice", candidate:e.candidate, room: sessionId}));
+    if(e.candidate) ws.send(JSON.stringify({type:"ice", candidate:e.candidate, room: activeSessionId}));
   };
 
   // Receive bot audio (if future TTS server-side), not used here
