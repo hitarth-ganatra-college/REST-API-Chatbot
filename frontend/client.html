@@ -79,7 +79,7 @@
 const SIGNALING_SERVER_URL = "ws://localhost:8765"; // CHANGE for your server!
 const SESSION_ID_PATTERN = /^[a-zA-Z0-9_]{3,32}$/;
 
-function sanitizeSessionId(value) {
+function validateSessionId(value) {
   if (!value) return null;
   const trimmed = value.trim();
   return SESSION_ID_PATTERN.test(trimmed) ? trimmed : null;
@@ -87,13 +87,13 @@ function sanitizeSessionId(value) {
 
 function resolveSessionId() {
   const sessionParams = new URLSearchParams(window.location.search);
-  const paramSessionId = sanitizeSessionId(sessionParams.get("session"));
+  const paramSessionId = validateSessionId(sessionParams.get("session"));
   if (paramSessionId) {
     localStorage.setItem("voiceAgentSessionId", paramSessionId);
     return paramSessionId;
   }
 
-  return sanitizeSessionId(localStorage.getItem("voiceAgentSessionId"));
+  return validateSessionId(localStorage.getItem("voiceAgentSessionId"));
 }
 
 let activeSessionId = null;
@@ -126,7 +126,7 @@ function appendMsg(text, who) {
 // --- Voice/webRTC setup code ---
 voiceBtn.onclick = async () => {
   showModal();
-  activeSessionId = sanitizeSessionId(sessionInput.value);
+  activeSessionId = validateSessionId(sessionInput.value);
   if (!activeSessionId) {
     setStatus("Session ID required (3-32 chars, letters, numbers, or underscores).");
     return;
@@ -135,6 +135,11 @@ voiceBtn.onclick = async () => {
   setStatus("Connecting...");
   ws = new WebSocket(SIGNALING_SERVER_URL);
   ws.onopen = () => {
+    if (!activeSessionId) {
+      setStatus("Session ID missing.");
+      ws.close();
+      return;
+    }
     ws.send(JSON.stringify({type: "join", room: activeSessionId, side: "client"}));
     setStatus("Waiting for agent...");
   };
@@ -175,7 +180,9 @@ async function setupWebRTC() {
   pc = new RTCPeerConnection({iceServers: []});
   // ICE trickle
   pc.onicecandidate = e => {
-    if(e.candidate) ws.send(JSON.stringify({type:"ice", candidate:e.candidate, room: activeSessionId}));
+    if(e.candidate && activeSessionId) {
+      ws.send(JSON.stringify({type:"ice", candidate:e.candidate, room: activeSessionId}));
+    }
   };
 
   // Receive bot audio (if future TTS server-side), not used here
