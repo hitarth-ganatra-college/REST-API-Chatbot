@@ -135,11 +135,6 @@ voiceBtn.onclick = async () => {
   setStatus("Connecting...");
   ws = new WebSocket(SIGNALING_SERVER_URL);
   ws.onopen = () => {
-    if (!activeSessionId) {
-      setStatus("Session ID missing.");
-      ws.close();
-      return;
-    }
     ws.send(JSON.stringify({type: "join", room: activeSessionId, side: "client"}));
     setStatus("Waiting for agent...");
   };
