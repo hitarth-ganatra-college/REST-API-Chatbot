@@ -77,13 +77,13 @@
 
 <script>
 const SIGNALING_SERVER_URL = "ws://localhost:8765"; // CHANGE for your server!
-const SESSION_ID_PATTERN = /^[a-zA-Z0-9_]{3,32}$/;
+const SESSION_ID_REGEX = /^[a-zA-Z0-9_]{3,32}$/;
 
 function validateSessionId(value) {
   if (!value) return null;
   const trimmed = value.trim();
   if (!trimmed) return null;
-  return SESSION_ID_PATTERN.test(trimmed) ? trimmed : null;
+  return SESSION_ID_REGEX.test(trimmed) ? trimmed : null;
 }
 
 function resolveSessionId() {
@@ -176,7 +176,7 @@ async function setupWebRTC(sessionId) {
   // ICE trickle
   pc.onicecandidate = e => {
     if (e.candidate) {
-      ws.send(JSON.stringify({type:"ice", candidate:e.candidate, session_id: sessionId}));
+      ws.send(JSON.stringify({type: "ice", candidate: e.candidate, session_id: sessionId}));
     }
   };
 
